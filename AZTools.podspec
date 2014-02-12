@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.platform     = :ios
   s.ios.deployment_target = '5.0'
   s.source       = { :git => "https://github.com/gbammc/AZTools.git", :tag => "0.0.2" }
-  s.source_files  = 'UIColor+Helper', 'UIView+Helper', 'UIImage+Helper'
+  s.source_files  = 'UIColor+Helper', 'UIView+Helper', 'UIImage+Helper', 'AZNavigationController'
   s.framework  = 'CoreGraphics', 'QuartzCore'
   s.requires_arc = true
 end
