@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "AZTools"
-  s.version      = "0.0.3"
+  s.version      = "0.0.4"
   s.summary      = "AZTools"
   s.description  = "AZTools is a collection of my usually use helpers"
   s.homepage     = "https://github.com/gbammc/AZTools"
