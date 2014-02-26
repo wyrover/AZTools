@@ -10,6 +10,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #define KEY_WINDOW [[UIApplication sharedApplication] keyWindow]
+NSString * const AZNavigationNotificationStartPanning = @"AZNavigationNotificationStartPanning";
 
 @interface AZNavigationController () {
     CGPoint     startPoint;
@@ -36,7 +37,7 @@
         
         self.screenShotsList = [[NSMutableArray alloc] initWithCapacity:2];
         self.canDragBack = YES;
-        self.navigationType = AZNavigationZoom;
+        self.navigationType = AZNavigationTransation;
     }
     return self;
 }
@@ -44,16 +45,16 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-	// Do any additional setup after loading the view.
+    // Do any additional setup after loading the view.
+    
+    if ([self.navigationController respondsToSelector:@selector(interactivePopGestureRecognizer)]) {
+        self.navigationController.interactivePopGestureRecognizer.enabled = NO;
+    }
     
     UIImageView *imgLeftSideShadow = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"leftside_shadow_bg"]];
     CGFloat shadowWidth = 10;
     imgLeftSideShadow.frame = CGRectMake(-shadowWidth, 0, shadowWidth, self.view.frame.size.height);
     [self.view addSubview:imgLeftSideShadow];
-    
-    UIPanGestureRecognizer *recognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanGesture:)];
-    recognizer.delaysTouchesBegan = YES;
-    [self.view addGestureRecognizer:recognizer];
 }
 
 - (void)didReceiveMemoryWarning
@@ -65,13 +66,28 @@
 #pragma mark - overwrite methods
 
 - (void)pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
-    [self.screenShotsList addObject:[self capture]];
+    if (!self.panGesture && (self.viewControllers.count > 0)) {
+        [self.screenShotsList addObject:[self capture]];
+        self.panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanGesture:)];
+        self.panGesture.delaysTouchesBegan = YES;
+        [self.view addGestureRecognizer:self.panGesture];
+    }
     
     [super pushViewController:viewController animated:animated];
 }
 
 - (UIViewController *)popViewControllerAnimated:(BOOL)animated {
-    [self.screenShotsList removeLastObject];
+    [self.screenShotsList removeAllObjects];
+    
+    if (self.viewControllers.count == 2 && self.canDragBack) {
+        [self.view removeGestureRecognizer:self.panGesture];
+        self.panGesture = nil;
+    }
+    
+    if (self.backgroundView) {
+        [self.backgroundView removeFromSuperview];
+        self.backgroundView = nil;
+    }
     
     return [super popViewControllerAnimated:animated];
 }
@@ -80,12 +96,39 @@
 
 // get the current view screen shot
 - (UIImage *)capture {
-    UIGraphicsBeginImageContextWithOptions(self.view.bounds.size, self.view.opaque, [[UIScreen mainScreen] scale]);
-    [self.view.layer renderInContext:UIGraphicsGetCurrentContext()];
-    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
+    UIImage *image = nil;
     
-    return img;
+    CGImageRef UIGetScreenImage(); 
+    CGImageRef imgRef = UIGetScreenImage();
+    UIImage* img=[UIImage imageWithCGImage:imgRef];
+    
+    if ((([[[UIDevice currentDevice] systemVersion] floatValue]) < 7.0)) {
+        image = [self getImageFromImage:img];
+    } else {
+        image = img;
+    }
+    return image;
+}
+
+- (UIImage *)getImageFromImage:(UIImage*)superImage {
+    CGFloat statusBarHeight = [[UIApplication sharedApplication] statusBarFrame].size.height;
+    CGRect screenBounds = [UIScreen mainScreen].bounds;
+    CGSize subImageSize = CGSizeMake(screenBounds.size.width * 2., (screenBounds.size.height - statusBarHeight) * 2);
+    //定义裁剪的区域相对于原图片的位置
+    CGRect subImageRect = (CGRect) {
+        0,
+        statusBarHeight * 2,
+        subImageSize
+    };
+    CGImageRef subImageRef = CGImageCreateWithImageInRect(superImage.CGImage, subImageRect);
+    UIGraphicsBeginImageContext(subImageSize);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextDrawImage(context, subImageRect, subImageRef);
+    UIImage* subImage = [UIImage imageWithCGImage:subImageRef];
+    CGImageRelease(subImageRef);
+    UIGraphicsEndImageContext();
+    //返回裁剪的部分图像
+    return subImage;
 }
 
 - (void)moveCurrentViewToX:(CGFloat)x {
@@ -131,13 +174,13 @@
         _isMoving = YES;
         startPoint = touchPoint;
         
+        CGRect frame = [UIScreen mainScreen].bounds;
         if (!self.backgroundView) {
-            CGRect frame = self.view.frame;
             
-            self.backgroundView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, frame.size.width, frame.size.height)];
+            self.backgroundView = [[UIView alloc] initWithFrame:frame];
             [self.view.superview insertSubview:self.backgroundView belowSubview:self.view];
             
-            blackMask = [[UIView alloc] initWithFrame:CGRectMake(0, 0, frame.size.width, frame.size.height)];
+            blackMask = [[UIView alloc] initWithFrame:frame];
             blackMask.backgroundColor = [UIColor blackColor];
             [self.backgroundView addSubview:blackMask];
         }
@@ -146,11 +189,17 @@
         
         if (lastScreenShotView) [lastScreenShotView removeFromSuperview];
         
+        CGFloat statusBarHeight = ((([[[UIDevice currentDevice] systemVersion] floatValue]) >= 7.0)) ? 0 : [[UIApplication sharedApplication] statusBarFrame].size.height;
         UIImage *lastScreenShot = [self.screenShotsList lastObject];
-        lastScreenShotView = [[UIImageView alloc] initWithImage:lastScreenShot];
+        lastScreenShotView = [[UIImageView alloc] initWithFrame:(CGRect) {
+            CGPointZero,
+            self.view.frame.size.width,
+            frame.size.height - statusBarHeight
+        }];
+        lastScreenShotView.image = lastScreenShot;
         [self.backgroundView insertSubview:lastScreenShotView belowSubview:blackMask];
         
-    // end paning, always check that if it should move right or move left automatically
+        // end paning, always check that if it should move right or move left automatically
     } else if (recognizer.state == UIGestureRecognizerStateEnded) {
         
         if (touchPoint.x - startPoint.x > 50) {
@@ -179,8 +228,8 @@
             }];
         }
         return;
-    
-    // cancel panning, always move to left side automatically
+        
+        // cancel panning, always move to left side automatically
     } else if (recognizer.state == UIGestureRecognizerStateCancelled) {
         
         [UIView animateWithDuration:0.3 animations:^{
