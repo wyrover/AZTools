@@ -50,11 +50,6 @@ NSString * const AZNavigationNotificationStartPanning = @"AZNavigationNotificati
     if ([self.navigationController respondsToSelector:@selector(interactivePopGestureRecognizer)]) {
         self.navigationController.interactivePopGestureRecognizer.enabled = NO;
     }
-    
-    UIImageView *imgLeftSideShadow = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"leftside_shadow_bg"]];
-    CGFloat shadowWidth = 10;
-    imgLeftSideShadow.frame = CGRectMake(-shadowWidth, 0, shadowWidth, self.view.frame.size.height);
-    [self.view addSubview:imgLeftSideShadow];
 }
 
 - (void)didReceiveMemoryWarning
@@ -94,15 +89,13 @@ NSString * const AZNavigationNotificationStartPanning = @"AZNavigationNotificati
 
 #pragma mark - handle methods
 
-// get the current view screen shot
 - (UIImage *)capture {
+    UIGraphicsBeginImageContextWithOptions(self.view.bounds.size, self.view.opaque, [[UIScreen mainScreen] scale]);
+    [self.view.layer renderInContext:UIGraphicsGetCurrentContext()];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
     UIImage *image = nil;
-    
-    CGImageRef UIGetScreenImage(); 
-    CGImageRef imgRef = UIGetScreenImage();
-    UIImage* img=[UIImage imageWithCGImage:imgRef];
-    
-    if ((([[[UIDevice currentDevice] systemVersion] floatValue]) < 7.0)) {
+    UIGraphicsEndImageContext();
+    if (([[[UIDevice currentDevice] systemVersion] floatValue]) >= 7.0) {
         image = [self getImageFromImage:img];
     } else {
         image = img;
@@ -179,6 +172,11 @@ NSString * const AZNavigationNotificationStartPanning = @"AZNavigationNotificati
             
             self.backgroundView = [[UIView alloc] initWithFrame:frame];
             [self.view.superview insertSubview:self.backgroundView belowSubview:self.view];
+            
+            UIImageView *imgLeftSideShadow = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"leftside_shadow_bg"]];
+            CGFloat shadowWidth = 10;
+            imgLeftSideShadow.frame = CGRectMake(-shadowWidth, 0, shadowWidth, self.view.frame.size.height);
+            [self.backgroundView addSubview:imgLeftSideShadow];
             
             blackMask = [[UIView alloc] initWithFrame:frame];
             blackMask.backgroundColor = [UIColor blackColor];
